@@ -21,13 +21,13 @@ public class GoogleAuthService {
   private final TokenStore store = new TokenStore();
 
   public GoogleAuthService(
-      @Value("${google.oauth.client-id}") String clientId,
-      @Value("${google.oauth.client-secret}") String clientSecret,
-      @Value("${google.oauth.redirect-uri:postmessage}") String redirectUri) {
-    this.clientId = clientId;
-    this.clientSecret = clientSecret;
-    this.redirectUri = redirectUri;
-  }
+    @Value("${google.oauth.client-id}") String clientId,
+    @Value("${google.oauth.client-secret}") String clientSecret,
+    @Value("${google.oauth.redirect-uri}") String redirectUri) {  // <-- no default
+  this.clientId = clientId;
+  this.clientSecret = clientSecret;
+  this.redirectUri = redirectUri;
+}
 
   /** Exchange serverAuthCode from the app for access+refresh tokens and save them */
   public void exchangeAndSave(String userId, String serverAuthCode) throws Exception {
