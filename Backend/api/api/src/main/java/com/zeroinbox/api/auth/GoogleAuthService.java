@@ -7,6 +7,13 @@ import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import com.google.api.client.http.HttpTransport;
+import com.google.api.client.http.GenericUrl;
+import com.google.api.client.http.UrlEncodedContent;
+import com.google.api.client.http.HttpRequest;
+import com.google.api.client.http.HttpResponse;
+import java.util.HashMap;
+import java.util.Map;
 
 import java.time.Instant;
 
@@ -28,6 +35,51 @@ public class GoogleAuthService {
   this.clientSecret = clientSecret;
   this.redirectUri = redirectUri;
 }
+
+public void exchangeAndSavePkce(
+    String userId,
+    String authorizationCode,
+    String codeVerifier,
+    String androidClientId,
+    String nativeRedirectUri
+) throws Exception {
+  if (authorizationCode == null || authorizationCode.isBlank())
+    throw new IllegalArgumentException("authorizationCode required");
+  if (codeVerifier == null || codeVerifier.isBlank())
+    throw new IllegalArgumentException("codeVerifier required (PKCE)");
+  if (androidClientId == null || androidClientId.isBlank())
+    throw new IllegalArgumentException("androidClientId required");
+  if (nativeRedirectUri == null || nativeRedirectUri.isBlank())
+    throw new IllegalArgumentException("native redirectUri required");
+
+  // Build application/x-www-form-urlencoded body for Google's token endpoint
+  Map<String, String> params = new HashMap<>();
+  params.put("grant_type", "authorization_code");
+  params.put("code", authorizationCode);
+  params.put("client_id", androidClientId);   // ANDROID client id (no secret!)
+  params.put("redirect_uri", nativeRedirectUri); // e.g. zeroinbox://...
+  params.put("code_verifier", codeVerifier);  // PKCE verifier
+
+  HttpTransport http = transport; // reuse your NetHttpTransport
+  HttpRequest request = http.createRequestFactory().buildPostRequest(
+      new GenericUrl("https://oauth2.googleapis.com/token"),
+      new UrlEncodedContent(params)
+  );
+
+  // Parse directly into GoogleTokenResponse using the google-api-client machinery
+  HttpResponse httpResp = request.execute();
+  GoogleTokenResponse resp = httpResp.parseAs(GoogleTokenResponse.class);
+
+  TokenStore.Tokens t = new TokenStore.Tokens();
+  t.accessToken  = resp.getAccessToken();
+  t.refreshToken = resp.getRefreshToken(); // may be null if offline access not granted
+  Long exp       = resp.getExpiresInSeconds();
+  t.expiresAt    = (exp != null) ? Instant.now().plusSeconds(exp) : Instant.now().plusSeconds(3000);
+
+  store.put(userId, t);
+}
+
+
 
   /** Exchange serverAuthCode from the app for access+refresh tokens and save them */
   public void exchangeAndSave(String userId, String serverAuthCode) throws Exception {
